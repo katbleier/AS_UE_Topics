@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="../../../../schema/ODD/out/ediarum.asue.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="../../../../schema/ODD/out/ediarum.asue.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xmlns:telota="http://www.telota.de" xml:id="letter.6948"
+    telota:doctype="letter">
+    <teiHeader>
+        <fileDesc>
+            <titleStmt>
+                <title>Arnold Schönberg an Universal-Edition, 13. September 1911</title>
+                <respStmt>
+                    <persName>
+                        <forename>Therese</forename>
+                        <surname>Muxeneder</surname>
+                    </persName>
+                    <resp>
+                        <term>Projektleitung</term>
+                        <term>Herausgeberschaft</term>
+                    </resp>
+                </respStmt>
+                <respStmt>
+                    <persName>
+                        <forename>Katharina</forename>
+                        <surname>Bleier</surname>
+                    </persName>
+                    <resp>
+                        <term>Wissenschaftliche Mitarbeit</term>
+                        <term>Herausgeberschaft</term>
+                    </resp>
+                </respStmt>
+                <respStmt>
+                    <persName>
+                        <forename>Philipp</forename>
+                        <surname>Kehrer</surname>
+                    </persName>
+                    <resp>
+                        <term>Wissenschaftliche Mitarbeit</term>
+                    </resp>
+                </respStmt>
+                <respStmt>
+                    <persName>
+                        <forename>Jannik</forename>
+                        <surname>Franz</surname>
+                    </persName>
+                    <resp>
+                        <term>Wissenschaftliche Mitarbeit</term>
+                    </resp>
+                </respStmt>
+                <respStmt>
+                    <persName>
+                        <forename>Christopher</forename>
+                        <surname>Pollin</surname>
+                    </persName>
+                    <resp>
+                        <term>Datenmodellierung</term>
+                    </resp>
+                </respStmt>
+            </titleStmt>
+            <publicationStmt>
+                <publisher ref="http://d-nb.info/gnd/10000022-8">Arnold Schönberg Center</publisher>
+                <pubPlace key="place.9.11">Wien</pubPlace>
+                <publisher ref="http://d-nb.info/gnd/10060012-8">Wissenschaftszentrum Arnold
+                    Schönberg und die Wiener Schule an der Universität für Musik und darstellende
+                    Kunst Wien</publisher>
+                <availability>
+                    <licence target="https://creativecommons.org/licenses/by-nc-sa/4.0/"
+                        >Attribution-ShareAlike 4.0 International (CC BY-NC-SA 4.0)</licence>
+                </availability>
+            </publicationStmt>
+            <seriesStmt>
+                <title>The Correspondence between Arnold Schönberg and his Publishers
+                    Universal-Edition and Verlag Dreililien. A Critical Hybrid Edition</title>
+                <editor>Therese Muxeneder</editor>
+                <editor>Katharina Bleier</editor>
+            </seriesStmt>
+            <sourceDesc>
+                <msDesc>
+                    <msIdentifier>
+                        <placeName key="place.9.11">
+                            <settlement>Wien</settlement>
+                        </placeName>
+                        <institution ref="https://d-nb.info/gnd/10000022-8">Arnold Schönberg
+                            Center</institution>
+                        <repository>Archiv</repository>
+                        <collection>Universal Edition Collection</collection>
+                        <altIdentifier>
+                            <placeName key="place.9.11">
+                                <settlement>Wien</settlement>
+                            </placeName>
+                            <institution>Arnold Schönberg Center</institution>
+                            <idno type="signature">ASCC 6948</idno>
+                        </altIdentifier>
+                    </msIdentifier>
+                </msDesc>
+            </sourceDesc>
+        </fileDesc>
+        <profileDesc>
+            <correspDesc>
+                <correspAction type="sent">
+                    <persName key="pers.3263">Schönberg, Arnold</persName>
+                    <placeName key="place.2.2">Berg am Starnberger See</placeName>
+                    <date when="1911-09-13" cert="high"/>
+                </correspAction>
+                <correspAction type="received">
+                    <persName key="pers.1538">Hertzka, Emil</persName>
+                    <orgName key="org.1">Universal-Edition</orgName>
+                </correspAction>
+            </correspDesc>
+            <textClass>
+                <keywords>
+                    <term>Brief</term>
+                </keywords>
+            </textClass>
+        </profileDesc>
+    </teiHeader>
+    <facsimile>
+        <graphic url="https://archive.schoenberg.at/manifest/letters/6948_hl.json"
+            mimeType="application/ld+json" type="IIIF-Manifest" xml:id="manifest.6948_hl"/>
+    </facsimile>
+    <text>
+        <body>
+            <div type="letter">
+                <pb n="1" xml:id="p.1"/>
+                <opener>
+                    <dateline rendition="#l">
+                        <date when="1911-09-13">13/9. 1911</date>
+                    </dateline>
+                    <address>
+                        <addrLine rendition="#r">
+                            <placeName key="place.2.2">Berg am Starnberger See</placeName>
+                        </addrLine>
+                        <addrLine rendition="#r">Bayern</addrLine>
+                        <addrLine rendition="#r">per Adr. <persName key="pers.4133">Widl</persName>
+                        </addrLine>
+                    </address>
+                </opener>
+                <salute>Lieber Herr <rs type="person" key="pers.1538">Direktor</rs>,</salute>
+                <p rendition="#inline">vor Allem gratuliere <lb/>ich Ihnen zu meinem heutigen
+                    Geburtstag. <lb/>Die <bibl sameAs="werke.5">Pelleas</bibl>-Partitur und die
+                        <bibl sameAs="schriften.1">Harmonielehre</bibl>, die <lb/>Sie mir aus diesem
+                    Anlass nicht geschickt haben, <lb/>w<supplied cert="high">ird</supplied> mir
+                    immer gleichviel Freude machen. <lb/>Auch hat mich gefreut, dass Sie mir auf
+                    <lb/>meine letzten Fragen, so rasche und so ange<g ref="#typoHyphen"/>
+                    <lb break="no"/>nehme Antworten gegeben haben.<!-- wohl ironisch, wahrscheinlich wurden 6945 und 6946 nicht beantwortet --></p>
+                <p>Nichtsdestoweniger aber muss ich Ihnen, <lb/>so schmerzvoll es mir selbst ist und
+                    so <lb/>peinlich es mich berührt Ihnen diese Nachricht <lb/>zu geben (dass
+                    gerade ich es sein muss, <lb/>der Ihnen so was mitteil<supplied cert="high"
+                        >t</supplied> ist mir besonders <lb/>schrecklich; und könnte ich es
+                    irgendwie <lb/>v<supplied cert="high">er</supplied>meiden – glauben Sie mir ich
+                    <lb/>täte es; es wäre mir wirklich eine Er<g ref="#typoHyphen"/>
+                    <lb break="no"/>leichterung) dennoch die unangenehme <lb/>Mitteilung machen,
+                    dass obwohl ich alles <lb/>getan habe um es zu verhindern, ich den<g
+                        ref="#typoHyphen"/>
+                    <lb break="no"/>noch gestern die <seg type="comment"><orig>Nachricht</orig><note xml:id="nlt1_15r_sxb" resp="#KBleier"><p>Vgl. Alexander Zemlinsky an Arnold Schönberg, 9. September 1911
+                        (<ref target="https://repo.schoenberg.at/urn:nbn:at:at-asc-B187524"
+                            >ASCC 18752</ref>). Zemlinsky hatte das Konzert mit Heinrich
+                                    <persName key="pers.3842">Teweles</persName>, Direktor des
+                                    <orgName key="org.121">Neuen Deutschen Theaters</orgName> in
+                                Prag, vereinbart. Die Mitwirkung von Pablo Casals als Solist sollte
+                                Aufmerksamkeit für das Konzert garantieren. Hinsichtlich der
+                                Programmplanung gab es Überlegungen, außer den schließlich
+                                aufgeführten Werken Wolfgang Amadeus Mozarts Symphonie Nr. 40 KV 550
+                                zu inkludieren, wovon <persName key="pers.4309">Zemlinsky</persName>
+                                aufgrund der Konzertlänge und Probenzeit abriet. Diskutiert wurde
+                                auch, ob <persName key="pers.3263">Schönberg</persName> das Dirigat
+                                der Solokonzerte übernehmen könne, was ebenfalls nicht realisiert
+                                wurde. Vgl. Arnold Schönberg an Alexander Zemlinsky, 29. Dezember 1911 (<ref
+                                    target="https://repo.schoenberg.at/urn:nbn:at:at-asc-B002291"
+                                    >ASCC 229</ref>); Alexander Zemlinsky an Arnold Schönberg, Jänner 1912 (<ref
+                                        target="https://repo.schoenberg.at/urn:nbn:at:at-asc-B186590"
+                                    >ASCC
+                                        18659</ref>)</p></note></seg> erhielt, dass <pb n="2" xml:id="p.2"/>ich am <date when="1912-02-29">29.
+                        Februar</date> (dieser Tag wird <lb/>im Jahr <date when="1912">1912</date>
+                    eigens zu diesem <lb/>Zweck eingeschaltet) in <placeName key="place.13.1"
+                        >Prag</placeName>
+                    <lb/>ein <seg type="comment">
+                        <orig>Konzert</orig>
+                        <note xml:id="nahc_g5r_sxb" resp="#KBleier">
+                            <p>
+                                <date when="1912-02-29">29. Februar 1912</date>, Prag, <orgName
+                                    key="org.121">Neues Deutsches Theater,</orgName> III.
+                                Philharmonisches Konzert</p>
+                            <p>Johann Sebastian Bach/Gustav Mahler, Suite aus den
+                                Orchesterwerken</p>
+                            <p>Joseph Haydn, Konzert für Violoncello und Orchester Nr. 2 Hob.
+                                VIIb:2</p>
+                            <p>
+                                <bibl sameAs="werke.5">Arnold Schönberg, Pelleas und Melisande op.
+                                    5</bibl>
+                            </p>
+                            <p>Camille Saint-Saëns, Konzert für Violoncello und Orchester Nr. 1 op.
+                                33</p>
+                            <p>Pablo Casals, Violoncello; Orchester Neues deutsches Theater Prag,
+                                    <persName key="pers.3263">Arnold Schönberg</persName>, Dirigent;
+                                    <persName key="pers.4309">Alexander Zemlinsky</persName>,
+                                Dirigent;</p> Ankündigung, Februar 1912 (<ref
+                                target="http://archive.schoenberg.at/resources/pages/view.php?search=&amp;k=&amp;modal=&amp;display=thumbs&amp;order_by=relevance&amp;offset=0&amp;per_page=48&amp;archive=&amp;sort=DESC&amp;restypes=7&amp;recentdaylimit=&amp;foredit=&amp;noreload=true&amp;access=&amp;ref=5523"
+                                >ASCI CP5523</ref>)</note>
+                    </seg> dirigieren soll, in welchem <lb/>ich <bibl sameAs="werke.5">Pelleas und
+                        Melisande</bibl> und <lb/>einige andere (fremde) Orchesterwer<g
+                        ref="#typoHyphen"/>
+                    <lb break="no"/>ke (gegen Honorar!) dirigieren <lb/>soll.</p>
+                <p>Es tut mir herzlichst leid, aber <lb/>ich kann nicht anders.</p>
+                <closer rendition="#c">
+                    <salute>Herzliche Grüße Ihr</salute>
+                    <signed><persName key="pers.3263">Arnold Schönberg</persName></signed>
+                </closer>
+                <postscript>
+                    <p>Nach <placeName key="place.9.11">Wien</placeName> komme ich hoffentlich
+                            n<supplied cert="high">icht</supplied>!!</p></postscript>
+            </div>
+        </body>
+    </text>
+</TEI>
