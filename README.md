@@ -3,9 +3,14 @@
 Topic Modeling der Korrespondenz Arnold Schönberg – Universal-Edition / Verlag Dreililien
 (Digitale Edition: https://www.schoenberg-ue.at).
 
-**Version 2 (2026):** von der TEI-Edition über Topics zu inhaltlich qualifizierten Korrespondenzbeziehungen –
-*wer mit wem* (correspDesc) und *worüber* (Topic Modeling).
-Version 1 (Projekt „Machine Learning für digitale Editionen", Universität Graz, WS 2024/25) liegt unverändert in [`v1_2025/`](v1_2025/).
+Von der TEI-Edition über Topics zu inhaltlich qualifizierten Korrespondenzbeziehungen –
+*wer mit wem* (correspDesc) und *worüber* (Topic Modeling). Beispiel für den Workshop
+„Netzwerken in Wien um 1900“ (November 2026).
+
+- **`AS_UE_Topics_Workshop.ipynb`** – der Ablauf mit den verwendeten Einstellungen, Benennungen, Gruppen und Abbildungen
+- `AS_UE_Topics_v2.ipynb` – Arbeitsnotebook mit allen Optionen (u. a. NMF als Vergleichsverfahren)
+
+Eine frühere Fassung (Universität Graz, WS 2024/25) liegt unverändert in [`v1_2025/`](v1_2025/).
 
 ## Daten
 
@@ -31,7 +36,7 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows   (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
 python -m spacy download de_core_news_md
-jupyter lab AS_UE_Topics_v2.ipynb
+jupyter lab AS_UE_Topics_Workshop.ipynb
 ```
 
 Beim ersten Lauf lädt `sentence-transformers` das Sprachmodell herunter (ca. 1 GB) und berechnet die Embeddings;
@@ -86,21 +91,6 @@ Danach Lemmatisierung mit spaCy (`de_core_news_md`) und einheitlich ß → ss.
 Profile je Korrespondenzpartner:in (bevorzugt Person, sonst Körperschaft aus `correspDesc`) und Zeitraum;
 Themendiversität als normierte Shannon-Entropie.
 
-## Änderungen gegenüber v1
-
-| v1 (2025) | v2 (2026) |
-|---|---|
-| unveröffentlichte XML (Edition v1.1), 1.393 Briefe | Schoenberg-Data v2.5, 1.643 Briefe (1.414 überliefert, 226 erschlossen) |
-| Worttrennungen als Leerzeichen („durchfüh rung") | `lb break="no"` verbindet Wörter |
-| Kleinschreibung und Stoppwortentfernung vor dem Embedding | Originalsätze ins Embedding, Stoppwörter nur für die Darstellung |
-| Fragmente („1 u.", „ii.") als eigene Dokumente | Mindestlänge 4 Wörter |
-| 231 Topics, 44 % Outlier (6.793 von 15.328 Sätzen) | siehe Notebook |
-| keine Metadaten | Absender:in, Empfänger:in, Datum, Bezugsbriefe, Erwähnungen |
-| Gestrichenes (`del`) und bei `choice` beide Lesarten (`sic` + `corr`) im Text | an Kodierung der Edition angepasst |
-| Namen bestimmen Topics („berlin, paris …") | Topic-Wörter ohne ausgezeichnete Namen |
-| Flexionsformen und Schreibvarianten getrennt | Normalisierung + Lemmatisierung der Topic-Wörter |
-| Briefe und Dokumente gemischt | nur Briefe; erschlossene Briefe als Kontakte im Netz |
-| kein Seed, Modell als pickle | Seed, Embedding-Cache, safetensors |
 
 ## Tests
 
