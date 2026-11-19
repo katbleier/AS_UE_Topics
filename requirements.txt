@@ -12,3 +12,5 @@ hdbscan>=0.8.33
 # Notebook
 jupyterlab
 plotly>=5.0
+# Lemmatisierung der Topic-Wörter (danach: python -m spacy download de_core_news_md)
+spacy>=3.7

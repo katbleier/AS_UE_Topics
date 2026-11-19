@@ -26,13 +26,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .normalize import NormalizeConfig, prepare as normalize_prepare
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass
 class ModelConfig:
     min_words: int = 4                       # kürzere Einheiten werden nicht modelliert
-    repr_column: str = "text_noent"          # Text für die Topic-Darstellung („text" = mit Namen)
+    repr_column: str = "text_repr"           # Text für die Topic-Darstellung: ohne Namen, vereinheitlicht, lemmatisiert
+    normalize: NormalizeConfig | None = field(default_factory=NormalizeConfig)   # None = keine Normalisierung
     seed: int = 42
     # BERTopic
     embedding_model: str = "paraphrase-multilingual-mpnet-base-v2"
@@ -59,6 +62,7 @@ def load_stopwords(cfg: ModelConfig) -> list[str]:
             line = line.strip().lower()
             if line and not line.startswith("#"):
                 words.add(line)
+                words.add(line.replace("ß", "ss"))   # passend zur Normalisierung ß -> ss
     return sorted(words)
 
 
@@ -74,6 +78,10 @@ def load_units(out_dir: str | Path, cfg: ModelConfig) -> pd.DataFrame:
     df = df[df["text"].str.contains(r"[^\W\d_]{2,}", regex=True)]
     df = df.reset_index(drop=True)
     print(f"{len(df)} von {n0} Einheiten mit >= {cfg.min_words} Wörtern")
+    if cfg.normalize is not None:
+        df = normalize_prepare(df, cfg.normalize, out_dir, source_column="text_noent")
+    else:
+        df["text_repr"] = df["text_noent"]
     return df
 
 
@@ -191,7 +199,8 @@ def fit_nmf(units: pd.DataFrame, cfg: ModelConfig, n_topics: int | None = None):
 def export(result: pd.DataFrame, info: pd.DataFrame, out_dir: str | Path, prefix: str):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    result[["letter_id", "unit_no", "text", "topic"]].to_csv(out_dir / f"{prefix}_unit_topics.csv", index=False)
+    cols = [c for c in ["letter_id", "unit_no", "text", "text_repr", "topic"] if c in result]
+    result[cols].to_csv(out_dir / f"{prefix}_unit_topics.csv", index=False)
     info.to_csv(out_dir / f"{prefix}_topic_info.csv", index=False)
     labels = out_dir / f"{prefix}_topic_labels.csv"
     if not labels.exists():   # manuelle Benennungen nie überschreiben

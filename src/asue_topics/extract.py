@@ -20,6 +20,9 @@ Editorische Entscheidungen (in ExtractConfig einstellbar), abgestimmt auf die Ko
     - <choice>: <corr> statt <sic>, <reg> statt <orig>, <expan> statt <abbr>
     - <supplied> (editorisch ergänzt) bleibt erhalten, <add> ebenso
     - <lb break="no"/> verbindet getrennte Wörter (<g ref="#typoHyphen"/> trägt keinen Text)
+    - Standard: nur Briefe (telota:doctype="letter"); Dokumente (Verträge, Abrechnungen …) ausgeschlossen
+    - Spalte status: „überliefert", „erschlossen" (Titel enthält „[erschlossen]") oder „ohne Text"
+      Erschlossene Briefe liefern keinen Text, zählen aber als Kontakt im Korrespondenznetz.
 
 Aufruf:
     python -m asue_topics.extract <TEI-Ordner> <Ausgabe-Ordner> [sentence|paragraph|letter]
@@ -76,7 +79,7 @@ class ExtractConfig:
     entity_rs_types: set = field(default_factory=lambda: {"person", "place", "org"})
     strip_before_nobreak: str = "¬="
     unit: str = "sentence"            # "sentence" | "paragraph" | "letter"
-    doc_types: set = field(default_factory=lambda: {"letter", "document"})
+    doc_types: set = field(default_factory=lambda: {"letter"})   # {"letter", "document"} = auch Dokumente (Verträge, Abrechnungen …)
     require_correspdesc: bool = True
     schoenberg_name_pattern: str = r"sch[öo]e?nberg,?\s*arnold|arnold\s+sch[öo]e?nberg"
 
@@ -283,6 +286,8 @@ def parse_file(path: Path, cfg: ExtractConfig, tree=None):
     xml_id = root.get("{http://www.w3.org/XML/1998/namespace}id") or ""
     letter_id = _norm(sig.text) if sig is not None and sig.text else (xml_id or path.stem)
     url = root.find(".//tei:publicationStmt/tei:idno[@type='URLWeb']", NS)
+    title_el = root.find(".//tei:titleStmt/tei:title", NS)
+    title = _norm("".join(title_el.itertext())) if title_el is not None else ""
 
     sent = root.find(".//tei:correspDesc/tei:correspAction[@type='sent']", NS)
     recv = root.find(".//tei:correspDesc/tei:correspAction[@type='received']", NS)
@@ -296,8 +301,19 @@ def parse_file(path: Path, cfg: ExtractConfig, tree=None):
     ments = _mentions(body, cfg) if body is not None else {k: [] for k in ("person", "org", "place", "work")}
     place = sent.find("tei:placeName", NS) if sent is not None else None
 
+    n_words = sum(len(clean(p).split()) for p in paras)
+    # Status: erschlossene Briefe sind im Titel als „[erschlossen]" gekennzeichnet
+    if "erschlossen" in title.lower():
+        status = "erschlossen"
+    elif n_words == 0:
+        status = "ohne Text"
+    else:
+        status = "überliefert"
+
     meta = {
         "letter_id": letter_id,
+        "title": title,
+        "status": status,
         "xml_id": xml_id,
         "url": _norm(url.text) if url is not None else "",
         "file": str(path.name),
@@ -312,7 +328,7 @@ def parse_file(path: Path, cfg: ExtractConfig, tree=None):
         "receiver_types": " | ".join(a[0] for a in r_act),
         "place_sent": _norm("".join(place.itertext())) if place is not None else "",
         "corresp_context": " | ".join(ctx),
-        "n_words": sum(len(clean(p).split()) for p in paras),
+        "n_words": n_words,
         "mentioned_persons": " | ".join(ments["person"]),
         "mentioned_orgs": " | ".join(ments["org"]),
         "mentioned_places": " | ".join(ments["place"]),

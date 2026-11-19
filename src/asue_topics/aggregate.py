@@ -15,6 +15,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+COUNT_COLS = ["n_letters", "n_erschlossen"]
+
 DEFAULT_PERIODS = [(1902, 1911, "1902–1911 Dreililien/frühe UE"),
                    (1912, 1918, "1912–1918"),
                    (1919, 1925, "1919–1925"),
@@ -88,16 +90,29 @@ def add_period(letters: pd.DataFrame, periods=DEFAULT_PERIODS) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def profile(lt: pd.DataFrame, letters: pd.DataFrame, by: str, min_letters: int = 1) -> pd.DataFrame:
-    """Mittlere Topic-Anteile pro Gruppe; Spalte 'n_letters' = Zahl der Briefe."""
+    """Mittlere Topic-Anteile pro Gruppe.
+
+    n_letters     Briefe mit Text, aus denen das Profil berechnet ist
+    n_erschlossen erschlossene Briefe derselben Gruppe (zählen als Kontakt, haben aber kein Topic-Profil)
+    """
     j = lt.join(letters.set_index("letter_id")[[by]], how="inner")
     prof = j.groupby(by).mean(numeric_only=True)
     prof.insert(0, "n_letters", j.groupby(by).size())
+    if "status" in letters:
+        ersch = letters[letters["status"] == "erschlossen"].groupby(by).size()
+        prof.insert(1, "n_erschlossen", ersch.reindex(prof.index).fillna(0).astype(int))
+    else:
+        prof.insert(1, "n_erschlossen", 0)
     return prof[prof["n_letters"] >= min_letters].sort_values("n_letters", ascending=False)
+
+
+def topic_columns(prof: pd.DataFrame) -> pd.DataFrame:
+    return prof.drop(columns=[c for c in COUNT_COLS if c in prof])
 
 
 def topic_diversity(prof: pd.DataFrame) -> pd.Series:
     """Normierte Shannon-Entropie der Topic-Verteilung (0 = ein Thema, 1 = alle gleich)."""
-    p = prof.drop(columns="n_letters").clip(lower=1e-12)
+    p = topic_columns(prof).clip(lower=1e-12)
     p = p.div(p.sum(axis=1), axis=0)
     h = -(p * np.log(p)).sum(axis=1)
     return (h / np.log(p.shape[1])).rename("diversity")
@@ -115,9 +130,10 @@ def plot_heatmap(prof: pd.DataFrame, labels: dict, path: str | Path, title: str,
     import matplotlib.pyplot as plt
 
     p = prof.head(max_rows)
-    data = p.drop(columns="n_letters")
+    data = topic_columns(p)
     cols = [_short(labels.get(c, f"T{c}")) for c in data.columns]
-    rows = [f"{_short(str(i), 28)} (n={n})" for i, n in zip(p.index, p["n_letters"])]
+    rows = [f"{_short(str(i), 28)} (n={n}" + (f", +{e} erschl.)" if e else ")")
+            for i, n, e in zip(p.index, p["n_letters"], p.get("n_erschlossen", [0] * len(p)))]
     fig, ax = plt.subplots(figsize=(max(8, 0.45 * len(cols) + 4), max(3, 0.4 * len(rows) + 2)))
     im = ax.imshow(data.values, aspect="auto", cmap="Blues")
     ax.set_xticks(range(len(cols)), cols, rotation=60, ha="right", fontsize=8)
@@ -164,7 +180,7 @@ def partner_topic_graph(prof: pd.DataFrame, labels: dict, min_share: float = 0.1
     G = nx.Graph()
     for partner, row in prof.iterrows():
         G.add_node(f"P:{partner}", label=str(partner), kind="partner", n_letters=int(row["n_letters"]))
-        for t, share in row.drop("n_letters").items():
+        for t, share in row.drop([c for c in COUNT_COLS if c in row.index]).items():
             if share >= min_share:
                 tid = f"T:{t}"
                 if tid not in G:
@@ -202,7 +218,15 @@ def plot_partner_topic_graph(G, path: str | Path, title: str):
 # ---------------------------------------------------------------------------
 
 def correspondence_graph(lt: pd.DataFrame, letters: pd.DataFrame, labels: dict):
-    """Gerichtetes Korrespondenznetz (Absender -> Empfänger, Personen bevorzugt) mit Topic-Anteilen je Kante."""
+    """Gerichtetes Korrespondenznetz (Absender -> Empfänger, Personen bevorzugt).
+
+    Kantenattribute:
+        n_letters        alle Briefe (überliefert + erschlossen + ohne Text)
+        n_ueberliefert   Briefe mit Text
+        n_erschlossen    erschlossene Briefe
+        t<k>             mittlerer Anteil von Topic k – nur aus überlieferten Briefen
+        dominant_topic   Topic mit dem höchsten Anteil
+    """
     import networkx as nx
 
     def main_actor(types, names, keys):
@@ -211,27 +235,36 @@ def correspondence_graph(lt: pd.DataFrame, letters: pd.DataFrame, labels: dict):
         x = pers[0] if pers else (a[0] if a else ("", "unbekannt", ""))
         return (x[2] or x[1]), x[1]
 
+    tcols = list(lt.columns)
     G = nx.DiGraph()
-    j = letters.set_index("letter_id").join(lt, how="inner")
-    tcols = [c for c in lt.columns]
-    for lid, r in j.iterrows():
+    j = letters.set_index("letter_id").join(lt, how="left")
+    for _, r in j.iterrows():
         sk, sn = main_actor(r["sender_types"], r["sender_names"], r["sender_keys"])
         rk, rn = main_actor(r["receiver_types"], r["receiver_names"], r["receiver_keys"])
         G.add_node(sk, label=sn)
         G.add_node(rk, label=rn)
-        if G.has_edge(sk, rk):
-            e = G[sk][rk]
-            e["n_letters"] += 1
+        if not G.has_edge(sk, rk):
+            G.add_edge(sk, rk, n_letters=0, n_ueberliefert=0, n_erschlossen=0, _n_topics=0,
+                       **{f"t{t}": 0.0 for t in tcols})
+        e = G[sk][rk]
+        e["n_letters"] += 1
+        status = r.get("status", "überliefert")
+        if status == "erschlossen":
+            e["n_erschlossen"] += 1
+        elif status == "überliefert":
+            e["n_ueberliefert"] += 1
+        has_topics = tcols and pd.notna(r[tcols[0]])
+        if has_topics:
+            e["_n_topics"] += 1
             for t in tcols:
                 e[f"t{t}"] += float(r[t])
-        else:
-            G.add_edge(sk, rk, n_letters=1, **{f"t{t}": float(r[t]) for t in tcols})
     for _, _, e in G.edges(data=True):
-        shares = {t: e[f"t{t}"] / e["n_letters"] for t in tcols}
+        n = e.pop("_n_topics")
+        shares = {t: (e[f"t{t}"] / n if n else 0.0) for t in tcols}
         for t in tcols:
             e[f"t{t}"] = round(shares[t], 4)
-        dom = max(shares, key=shares.get)
-        e["dominant_topic"] = labels.get(dom, f"T{dom}")
+        dom = max(shares, key=shares.get) if n else None
+        e["dominant_topic"] = labels.get(dom, f"T{dom}") if dom is not None else "(kein Text)"
         e["weight"] = e["n_letters"]
     return G
 

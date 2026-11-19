@@ -20,9 +20,9 @@ cd C:\Users\<name>\Documents\github
 git clone https://github.com/Schoenberg-UE/Schoenberg-Data.git
 ```
 
-Gelesen werden alle Dokumente mit `<correspDesc>` aus `data/letters` und `data/documents`; Register werden übersprungen.
-Datenstand v2.5 (Mai 2026): 1.794 Dokumente (1.643 Briefe, 151 Dokumente), davon 368 erschlossene Stücke ohne Text,
-15.723 Sätze. Die Editionsdaten werden hier nicht erneut veröffentlicht.
+Gelesen werden standardmäßig nur Briefe (`telota:doctype="letter"`); Dokumente wie Verträge und Abrechnungen
+haben einen eigenen Stil und sind ausgeschlossen (zuschaltbar). Register werden übersprungen.
+Datenstand v2.5 (Mai 2026): 1.643 Briefe – 1.414 überliefert, 226 erschlossen, 3 ohne Text; 15.605 Sätze. Die Editionsdaten werden hier nicht erneut veröffentlicht.
 
 ## Installation
 
@@ -30,6 +30,7 @@ Datenstand v2.5 (Mai 2026): 1.794 Dokumente (1.643 Briefe, 151 Dokumente), davon
 python -m venv .venv
 .venv\Scripts\activate          # Windows   (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
+python -m spacy download de_core_news_md
 jupyter lab AS_UE_Topics_v2.ipynb
 ```
 
@@ -70,6 +71,15 @@ die Topic-Wörter werden aus `text_noent` gebildet, damit Topics nicht aus Namen
 Stoppwörter ([stopwords-iso](https://github.com/stopwords-iso/stopwords-de), MIT) und projektspezifische Briefformeln
 (`resources/stopwords-domain.txt`) wirken nur auf die Darstellung der Topics. UMAP mit festem Seed.
 
+**Normalisierung der Topic-Wörter** (`normalize.py`, nur für `text_repr`, nicht für die Embeddings):
+Schreibvarianten werden datengetrieben vereinheitlicht (ss/ß, ue/ae/oe → ü/ä/ö, th → t, c → k/z), aber nur,
+wenn die Variante im Korpus selbst häufiger vorkommt; alle Ersetzungen stehen in `output/normalization_map.csv`
+(rund 270 Wortformen, z. B. daß → dass, ueber → über, Theil → Teil, Correctur → Korrektur).
+Danach Lemmatisierung mit spaCy (`de_core_news_md`) und einheitlich ß → ss.
+
+**Erschlossene Briefe** (Titel „[erschlossen]") haben keinen Text und kein Topic-Profil, zählen aber als Kontakt:
+`status` in `letters.csv`, `n_erschlossen` in den Profilen, eigene Kantenattribute im Korrespondenznetz.
+
 **Vergleichsverfahren:** TF-IDF + NMF (scikit-learn), um die Abhängigkeit der Topics vom Verfahren sichtbar zu machen.
 
 **Aggregation:** Topic-Anteile pro Brief = Anteil der Sätze je Topic (ohne Outlier).
@@ -80,7 +90,7 @@ Themendiversität als normierte Shannon-Entropie.
 
 | v1 (2025) | v2 (2026) |
 |---|---|
-| unveröffentlichte XML (Edition v1.1), 1.393 Briefe | Schoenberg-Data v2.5, 1.794 Dokumente (1.426 mit Text) |
+| unveröffentlichte XML (Edition v1.1), 1.393 Briefe | Schoenberg-Data v2.5, 1.643 Briefe (1.414 überliefert, 226 erschlossen) |
 | Worttrennungen als Leerzeichen („durchfüh rung") | `lb break="no"` verbindet Wörter |
 | Kleinschreibung und Stoppwortentfernung vor dem Embedding | Originalsätze ins Embedding, Stoppwörter nur für die Darstellung |
 | Fragmente („1 u.", „ii.") als eigene Dokumente | Mindestlänge 4 Wörter |
@@ -88,6 +98,8 @@ Themendiversität als normierte Shannon-Entropie.
 | keine Metadaten | Absender:in, Empfänger:in, Datum, Bezugsbriefe, Erwähnungen |
 | Gestrichenes (`del`) und bei `choice` beide Lesarten (`sic` + `corr`) im Text | an Kodierung der Edition angepasst |
 | Namen bestimmen Topics („berlin, paris …") | Topic-Wörter ohne ausgezeichnete Namen |
+| Flexionsformen und Schreibvarianten getrennt | Normalisierung + Lemmatisierung der Topic-Wörter |
+| Briefe und Dokumente gemischt | nur Briefe; erschlossene Briefe als Kontakte im Netz |
 | kein Seed, Modell als pickle | Seed, Embedding-Cache, safetensors |
 
 ## Tests
