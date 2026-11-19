@@ -126,48 +126,114 @@ def _short(label: str, n: int = 38) -> str:
     return label if len(label) <= n else label[: n - 1] + "…"
 
 
-def plot_heatmap(prof: pd.DataFrame, labels: dict, path: str | Path, title: str, max_rows: int = 15):
+def plot_heatmap(prof: pd.DataFrame, labels: dict, path: str | Path, title: str, max_rows: int = 15,
+                 order: list | None = None, separator_after=None, mode: str = "share",
+                 annotate: bool = True, subtitle: str | None = None):
+    """Heatmap Gruppen (Zeilen) × Topics (Spalten).
+
+    order            Spaltenreihenfolge (Topic-Schlüssel); fehlende Topics werden hinten angehängt
+    separator_after  Topic-Schlüssel, nach dem eine senkrechte Trennlinie gezeichnet wird
+                     (z. B. zwischen Themen und Sprechhandlungen)
+    mode             "share"     mittlerer Anteil der Sätze
+                     "deviation" Abweichung vom Durchschnitt aller Briefe (Prozentpunkte):
+                                 zeigt, was für eine Beziehung TYPISCH ist
+    """
     import matplotlib.pyplot as plt
+    from matplotlib.colors import TwoSlopeNorm
 
     p = prof.head(max_rows)
     data = topic_columns(p)
-    cols = [_short(labels.get(c, f"T{c}")) for c in data.columns]
-    rows = [f"{_short(str(i), 28)} (n={n}" + (f", +{e} erschl.)" if e else ")")
-            for i, n, e in zip(p.index, p["n_letters"], p.get("n_erschlossen", [0] * len(p)))]
-    fig, ax = plt.subplots(figsize=(max(8, 0.45 * len(cols) + 4), max(3, 0.4 * len(rows) + 2)))
-    im = ax.imshow(data.values, aspect="auto", cmap="Blues")
-    ax.set_xticks(range(len(cols)), cols, rotation=60, ha="right", fontsize=8)
-    ax.set_yticks(range(len(rows)), rows, fontsize=9)
-    ax.set_title(title, fontsize=11, loc="left")
-    fig.colorbar(im, ax=ax, label="mittlerer Anteil der Sätze", shrink=0.8)
+    if order:
+        cols = [c for c in order if c in data.columns] + [c for c in data.columns if c not in order]
+        data = data[cols]
+    if mode == "deviation":
+        allp = topic_columns(prof)
+        baseline = allp.mul(prof["n_letters"], axis=0).sum() / prof["n_letters"].sum()
+        values = (data - baseline[data.columns]) * 100
+        vmax = max(np.abs(values.values).max(), 1e-6)
+        cmap, norm = "RdBu", TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
+        cbar_label = "Abweichung vom Durchschnitt (Prozentpunkte)"
+        fmt = lambda v: f"{v:+.0f}"
+    else:
+        values = data * 100
+        cmap, norm = "Blues", None
+        cbar_label = "Anteil der Sätze (%)"
+        fmt = lambda v: f"{v:.0f}"
+
+    col_labels = [_short(labels.get(c, f"T{c}"), 32) for c in values.columns]
+    row_labels = [f"{_short(str(i), 28)} (n={n}" + (f", +{e} erschl.)" if e else ")")
+                  for i, n, e in zip(p.index, p["n_letters"], p.get("n_erschlossen", [0] * len(p)))]
+    fig, ax = plt.subplots(figsize=(max(9, 0.62 * len(col_labels) + 4.5), max(3.5, 0.48 * len(row_labels) + 2.6)))
+    im = ax.imshow(values.values, aspect="auto", cmap=cmap, norm=norm)
+    ax.set_xticks(range(len(col_labels)), col_labels, rotation=50, ha="right", fontsize=9)
+    ax.set_yticks(range(len(row_labels)), row_labels, fontsize=9.5)
+    ax.tick_params(length=0)
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    if annotate:
+        lim = np.abs(values.values).max()
+        for i in range(values.shape[0]):
+            for j in range(values.shape[1]):
+                v = values.values[i, j]
+                strong = abs(v) > 0.55 * lim
+                ax.text(j, i, fmt(v), ha="center", va="center", fontsize=7.5,
+                        color="white" if strong else "#333333")
+    if separator_after is not None and separator_after in list(values.columns):
+        x = list(values.columns).index(separator_after) + 0.5
+        ax.axvline(x, color="#222222", linewidth=1.6)
+    ax.set_title(title, fontsize=12, loc="left", pad=22 if subtitle else 8)
+    if subtitle:
+        ax.text(0, 1.02, subtitle, transform=ax.transAxes, fontsize=9, color="#555555")
+    cb = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
+    cb.set_label(cbar_label, fontsize=9)
     fig.tight_layout()
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
 
 def plot_topics_over_time(lt: pd.DataFrame, letters: pd.DataFrame, labels: dict, path: str | Path,
-                          top_n: int = 6, window: int = 3):
+                          top_n: int = 6, window: int = 3, topics: list | None = None,
+                          markers: dict | None = None, title: str = "Topics im Zeitverlauf",
+                          year_range: tuple | None = None):
+    """Mittlerer Topic-Anteil pro Jahr (gleitender Mittelwert), dazu Briefe pro Jahr als graue Balken.
+
+    topics      Auswahl von Topic-Schlüsseln (empfohlen: 2–4); sonst die top_n häufigsten
+    markers     {Jahr: "Beschriftung"} für senkrechte Markierungen, z. B. {1933: "Emigration"}
+    year_range  (von, bis) – z. B. (1902, 1938), um dünn belegte Randjahre auszublenden
+    """
     import matplotlib.pyplot as plt
 
     j = lt.join(letters.set_index("letter_id")[["year"]], how="inner")
     j = j[pd.to_numeric(j["year"], errors="coerce").notna()]
     j["year"] = j["year"].astype(int)
-    by_year = j.groupby("year").mean()
+    if year_range:
+        j = j[(j["year"] >= year_range[0]) & (j["year"] <= year_range[1])]
+    by_year = j.drop(columns="year").groupby(j["year"]).mean()
     full = by_year.reindex(range(by_year.index.min(), by_year.index.max() + 1))
-    smooth = full.rolling(window, center=True, min_periods=1).mean()
-    top = lt.mean().sort_values(ascending=False).head(top_n).index
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    for t in top:
-        ax.plot(smooth.index, smooth[t], label=_short(labels.get(t, f"T{t}"), 45), linewidth=1.8)
+    smooth = full.rolling(window, center=True, min_periods=1).mean() * 100
+    sel = topics or list(lt.mean().sort_values(ascending=False).head(top_n).index)
     counts = j.groupby("year").size().reindex(full.index).fillna(0)
+
+    fig, ax = plt.subplots(figsize=(11, 4.8))
     ax2 = ax.twinx()
-    ax2.bar(counts.index, counts.values, color="grey", alpha=0.15, width=0.8)
-    ax2.set_ylabel("Briefe pro Jahr", color="grey")
+    ax2.bar(counts.index, counts.values, color="#999999", alpha=0.18, width=0.85)
+    ax2.set_ylabel("Briefe pro Jahr", color="#888888", fontsize=9)
+    ax2.tick_params(colors="#888888", labelsize=8)
+    colors = ["#1f5f8b", "#d1782a", "#3b8f4f", "#8b3a62", "#6b6b6b", "#b5a33a"]
+    for k, t in enumerate(sel):
+        ax.plot(smooth.index, smooth[t], label=labels.get(t, f"T{t}"), linewidth=2.2,
+                color=colors[k % len(colors)])
+    for yr, txt in (markers or {}).items():
+        ax.axvline(yr, color="#444444", linewidth=1, linestyle="--")
+        ax.text(yr + 0.3, ax.get_ylim()[1] * 0.97, txt, fontsize=8.5, va="top", color="#444444")
     ax.set_zorder(ax2.get_zorder() + 1)
     ax.patch.set_visible(False)
-    ax.set_ylabel(f"mittlerer Anteil ({window}-Jahres-Mittel)")
-    ax.set_title("Häufigste Topics im Zeitverlauf", loc="left", fontsize=11)
-    ax.legend(fontsize=8, frameon=False, loc="upper left", bbox_to_anchor=(1.08, 1))
+    ax.set_ylabel(f"Anteil der Sätze in % ({window}-Jahres-Mittel)", fontsize=9)
+    ax.set_title(title, loc="left", fontsize=12)
+    for sp in ("top",):
+        ax.spines[sp].set_visible(False)
+        ax2.spines[sp].set_visible(False)
+    ax.legend(fontsize=9, frameon=False, loc="upper left")
     fig.tight_layout()
     fig.savefig(path, dpi=200)
     plt.close(fig)
