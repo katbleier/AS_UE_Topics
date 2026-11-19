@@ -338,3 +338,47 @@ def correspondence_graph(lt: pd.DataFrame, letters: pd.DataFrame, labels: dict):
 def write_gexf(G, path: str | Path):
     import networkx as nx
     nx.write_gexf(G, str(path))
+
+
+def plot_partner_profiles(prof: pd.DataFrame, labels: dict, path: str | Path, partners: list | None = None,
+                          top_k: int = 5, categories: dict | None = None, ncols: int = 3,
+                          title: str = "Worüber schreibt Schönberg mit wem?"):
+    """Einfache Alternative zur Heatmap: je Korrespondenzpartner:in ein kleines Balkendiagramm
+    mit den top_k häufigsten Topic-Gruppen (Anteil der Sätze in %).
+
+    partners    Auswahl (Index von prof); sonst die ersten 6 Zeilen
+    categories  {Topic-Schlüssel: "Thema" | "Sprechhandlung"} – färbt die Balken entsprechend ein
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+
+    sel = partners or list(prof.index[:6])
+    data = topic_columns(prof).loc[sel] * 100
+    colors = {"Thema": "#2f5d8a", "Sprechhandlung": "#d1782a"}
+    nrows = int(np.ceil(len(sel) / ncols))
+    xmax = data.max().max() * 1.18
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.3 * ncols, 2.5 * nrows + 0.9), squeeze=False)
+    for ax, partner in zip(axes.flat, sel):
+        row = data.loc[partner].sort_values(ascending=False).head(top_k)[::-1]
+        cols = [colors.get((categories or {}).get(t), "#2f5d8a") for t in row.index]
+        ax.barh(range(len(row)), row.values, color=cols, height=0.65)
+        ax.set_yticks(range(len(row)), [_short(labels.get(t, f"T{t}"), 30) for t in row.index], fontsize=9)
+        for i, v in enumerate(row.values):
+            ax.text(v + xmax * 0.015, i, f"{v:.0f} %", va="center", fontsize=8.5, color="#333333")
+        n = int(prof.loc[partner, "n_letters"])
+        e = int(prof.loc[partner, "n_erschlossen"]) if "n_erschlossen" in prof else 0
+        ax.set_title(f"{partner}\n{n} Briefe" + (f", {e} erschlossen" if e else ""), fontsize=10, loc="left")
+        ax.set_xlim(0, xmax)
+        ax.set_xticks([])
+        for sp in ("top", "right", "bottom"):
+            ax.spines[sp].set_visible(False)
+        ax.tick_params(length=0)
+    for ax in list(axes.flat)[len(sel):]:
+        ax.axis("off")
+    fig.suptitle(title, x=0.01, ha="left", fontsize=13)
+    if categories:
+        fig.legend(handles=[Patch(color=c, label=k) for k, c in colors.items()], loc="upper right",
+                   frameon=False, fontsize=9, ncol=2)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
