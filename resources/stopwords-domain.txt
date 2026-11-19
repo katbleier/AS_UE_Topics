@@ -72,3 +72,22 @@ iii
 bzw
 dr
 prof
+# allgemeine Substantive ohne thematischen Gehalt (für die Darstellung mit Substantiven)
+angelegenheit
+sache
+sachen
+ding
+fall
+weise
+art
+hinsicht
+bezug
+nachricht
+mitteilung
+frage
+moment
+augenblick
+gelegenheit
+grund
+punkt
+ansicht

@@ -18,6 +18,8 @@ Die Embeddings sehen weiterhin den Originalsatz.
 
 2. Lemmatisierung (optional, spaCy)
    Vertrag / Vertrages / Verträge -> Vertrag.
+   Standardmäßig bleiben nur Substantive und Eigennamen (pos_keep), damit Topics durch Begriffe wie
+   „Vertrag, Konto, Partitur" beschrieben werden und nicht durch „gerne, möchten, jedenfalls".
    Benötigt:  pip install spacy  und  python -m spacy download de_core_news_md
    Ist spaCy nicht installiert, wird dieser Schritt mit einem Hinweis übersprungen.
 """
@@ -39,6 +41,9 @@ class NormalizeConfig:
     orthography: bool = True
     lemmatize: bool = True
     spacy_model: str = "de_core_news_md"
+    # Nur diese Wortarten in die Topic-Wörter übernehmen (spaCy-POS); None = alle Wortarten.
+    # Standard: Substantive und Eigennamen (z. B. Werktitel) – ergibt die klarsten Topic-Bezeichnungen.
+    pos_keep: set | None = field(default_factory=lambda: {"NOUN", "PROPN"})
     min_len: int = 3                       # kürzere Wörter nicht normalisieren
     exclude: set = field(default_factory=set)   # Wörter (klein), die nie ersetzt werden sollen
     final_ss: bool = True                  # zum Schluss ß -> ss: eine einheitliche Schreibung für die Topic-Wörter
@@ -119,7 +124,7 @@ def apply_map(text: str, mapping: dict[str, str]) -> str:
 # 2. Lemmatisierung
 # ---------------------------------------------------------------------------
 
-def lemmatize(texts: list[str], model: str) -> list[str] | None:
+def lemmatize(texts: list[str], model: str, pos_keep: set | None = None) -> list[str] | None:
     try:
         import spacy
     except ImportError:
@@ -134,7 +139,10 @@ def lemmatize(texts: list[str], model: str) -> list[str] | None:
         return None
     out = []
     for doc in nlp.pipe(texts, batch_size=256):
-        out.append(" ".join(t.lemma_ for t in doc if not (t.is_punct or t.is_space)))
+        toks = [t for t in doc if not (t.is_punct or t.is_space or t.like_num)]
+        if pos_keep:
+            toks = [t for t in toks if t.pos_ in pos_keep]
+        out.append(" ".join(t.lemma_ for t in toks))
     return out
 
 
@@ -155,10 +163,10 @@ def prepare(units: pd.DataFrame, cfg: NormalizeConfig, out_dir: str | Path,
         texts = [apply_map(t, mapping) for t in texts]
         print(f"Schreibvarianten: {len(m)} Wortformen vereinheitlicht -> {out_dir / 'normalization_map.csv'}")
     if cfg.lemmatize:
-        lem = lemmatize(texts, cfg.spacy_model)
+        lem = lemmatize(texts, cfg.spacy_model, cfg.pos_keep)
         if lem is not None:
             texts = lem
-            print("Lemmatisierung: fertig")
+            print("Lemmatisierung: fertig" + (f" (nur {', '.join(sorted(cfg.pos_keep))})" if cfg.pos_keep else ""))
     if cfg.final_ss:
         texts = [t.replace("ß", "ss").replace("ẞ", "SS") for t in texts]
     u["text_repr"] = texts

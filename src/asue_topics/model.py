@@ -147,12 +147,14 @@ def fit_bertopic(units: pd.DataFrame, cfg: ModelConfig, cache_dir: str | Path):
     result = units.copy()
     result["topic"] = topics
     info = topic_model.get_topic_info()
+    # repräsentative Einheiten im ORIGINALTEXT ausgeben (BERTopic kennt nur die Darstellungsfassung)
+    to_orig = dict(zip(units[cfg.repr_column], units["text"]))
     info = pd.DataFrame({
         "topic": info["Topic"],
         "count": info["Count"],
         "top_words": info["Representation"].apply(lambda ws: ", ".join(ws[:10])),
         "representative_units": info["Representative_Docs"].apply(
-            lambda ds: " || ".join(ds) if isinstance(ds, list) else ""),
+            lambda ds: " || ".join(to_orig.get(d, d) for d in ds if d) if isinstance(ds, list) else ""),
     })
     return topic_model, result, info, embeddings
 
