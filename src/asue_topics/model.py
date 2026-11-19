@@ -6,6 +6,8 @@ Zwei Verfahren:
                   - Stoppwörter nur im CountVectorizer, d. h. nur für die Topic-Darstellung
                   - feste Seeds (UMAP), damit Ergebnisse reproduzierbar sind
                   - sehr kurze Einheiten (z. B. „1 u.", „ii.") werden vorab gefiltert
+                  - Topic-Wörter aus dem Text OHNE ausgezeichnete Namen (TEI persName/placeName/orgName),
+                    damit Topics nicht aus Personen- und Ortsnamen bestehen; die Embeddings sehen den vollen Satz
     fit_nmf       leichte Vergleichsbasis mit scikit-learn (TF-IDF + NMF), ohne Sprachmodell.
                   Nützlich, um zu zeigen, wie stark das Ergebnis vom Verfahren abhängt.
 
@@ -30,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[2]
 @dataclass
 class ModelConfig:
     min_words: int = 4                       # kürzere Einheiten werden nicht modelliert
+    repr_column: str = "text_noent"          # Text für die Topic-Darstellung („text" = mit Namen)
     seed: int = 42
     # BERTopic
     embedding_model: str = "paraphrase-multilingual-mpnet-base-v2"
@@ -60,8 +63,11 @@ def load_stopwords(cfg: ModelConfig) -> list[str]:
 
 
 def load_units(out_dir: str | Path, cfg: ModelConfig) -> pd.DataFrame:
-    df = pd.read_csv(Path(out_dir) / "units.csv", dtype={"text": str})
+    df = pd.read_csv(Path(out_dir) / "units.csv", dtype={"text": str, "text_noent": str})
     df["text"] = df["text"].fillna("").astype(str)
+    if "text_noent" not in df:
+        df["text_noent"] = df["text"]
+    df["text_noent"] = df["text_noent"].fillna("").astype(str)
     n0 = len(df)
     df = df[df["n_words"] >= cfg.min_words]
     # Einheiten ohne Buchstaben (Daten, Nummerierungen) entfernen – v1-Problem „float"
@@ -102,8 +108,10 @@ def fit_bertopic(units: pd.DataFrame, cfg: ModelConfig, cache_dir: str | Path):
     from sklearn.feature_extraction.text import CountVectorizer
     from umap import UMAP
 
-    docs = units["text"].tolist()
-    emb_model, embeddings = compute_embeddings(docs, cfg, cache_dir)
+    # Embeddings aus dem vollständigen Originalsatz, Topic-Wörter aus dem Text ohne Namen
+    docs_embed = units["text"].tolist()
+    docs = units[cfg.repr_column].tolist()
+    emb_model, embeddings = compute_embeddings(docs_embed, cfg, cache_dir)
 
     umap_model = UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric="cosine",
                       random_state=cfg.seed)
@@ -159,7 +167,7 @@ def fit_nmf(units: pd.DataFrame, cfg: ModelConfig, n_topics: int | None = None):
     vec = TfidfVectorizer(stop_words=load_stopwords(cfg), ngram_range=cfg.ngram_range,
                           min_df=min(cfg.min_df, max(1, len(units) // 50)),
                           token_pattern=TOKEN_PATTERN, lowercase=True, sublinear_tf=True)
-    X = vec.fit_transform(units["text"])
+    X = vec.fit_transform(units[cfg.repr_column])
     n_topics = min(n_topics, X.shape[1] - 1, X.shape[0] - 1)
     nmf = NMF(n_components=n_topics, random_state=cfg.seed, init="nndsvda", max_iter=500)
     W = nmf.fit_transform(X)

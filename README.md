@@ -9,11 +9,20 @@ Version 1 (Projekt „Machine Learning für digitale Editionen", Universität Gr
 
 ## Daten
 
-Die TEI-Daten der Edition sind im mdwRepository veröffentlicht (CC BY-SA 4.0):
-<https://datasets.mdw.ac.at/datasets/dataset/cfb9cae7-2729-40a0-958d-be13a539af28>
+Die TEI-Daten der Edition (CC BY-SA 4.0) liegen auf GitHub und im mdwRepository:
+- <https://github.com/Schoenberg-UE/Schoenberg-Data>
+- <https://datasets.mdw.ac.at/datasets/dataset/cfb9cae7-2729-40a0-958d-be13a539af28>
 
-ZIP „ASUE Data" herunterladen und die XML-Dateien nach `data/tei/` entpacken. Registerdateien (Personen, Werke …)
-können mit hinein; Dokumente ohne `<correspDesc>` werden übersprungen. Die Editionsdaten werden hier nicht erneut veröffentlicht.
+Das Datenrepo **neben** dieses Repo klonen – das Notebook erwartet `../Schoenberg-Data/data`:
+
+```powershell
+cd C:\Users\<name>\Documents\github
+git clone https://github.com/Schoenberg-UE/Schoenberg-Data.git
+```
+
+Gelesen werden alle Dokumente mit `<correspDesc>` aus `data/letters` und `data/documents`; Register werden übersprungen.
+Datenstand v2.5 (Mai 2026): 1.794 Dokumente (1.643 Briefe, 151 Dokumente), davon 368 erschlossene Stücke ohne Text,
+15.723 Sätze. Die Editionsdaten werden hier nicht erneut veröffentlicht.
 
 ## Installation
 
@@ -43,9 +52,13 @@ PYTHONPATH=src python -m asue_topics.extract data/tei output sentence
 
 ## Editorische und methodische Entscheidungen
 
-**Textgrundlage** (`ExtractConfig`): nur `<body>`; ausgelassen werden `<note>` (Stellenkommentar),
-`<opener>`/`<closer>` (Anrede, Datumszeile, Gruß, Unterschrift), `<del>`, `<surplus>`, `<fw>`.
-Bei `<choice>` wird `<expan>`/`<corr>`/`<reg>` übernommen, bei `<app>` das `<lem>`; `<lb break="no"/>` verbindet getrennte Wörter.
+**Textgrundlage** (`ExtractConfig`, abgestimmt auf ediarum.asue): nur `<body>`; ausgelassen werden
+Editionskommentare (`<note>` mit `@resp`/`@sameAs`), handschriftliche Vermerke (`<note @hand>`, optional einschließbar),
+Briefkopf und Formeln (`<opener>`, `<closer>`, `<salute>`, `<signed>`, `<dateline>`, `<address>`, `<stamp>`),
+`<del>`, `<metamark>`, `<figure>`, Notenbeispiele (`<notatedMusic>`/MEI).
+Bei `<seg type="comment">` bleibt `<orig>` (Brieftext) erhalten; bei `<choice>` wird `<corr>`/`<reg>`/`<expan>` übernommen;
+`<supplied>` und `<add>` bleiben; `<lb break="no"/>` verbindet getrennte Wörter.
+Zu jeder Einheit wird zusätzlich `text_noent` erzeugt: derselbe Text ohne ausgezeichnete Personen-, Orts- und Organisationsnamen.
 Die Liste der ausgelassenen Elemente sollte mit den Kodierrichtlinien der Edition abgeglichen werden
 (`extract.element_inventory()` zählt alle Elemente im `<body>`).
 
@@ -53,6 +66,7 @@ Die Liste der ausgelassenen Elemente sollte mit den Kodierrichtlinien der Editio
 Alternativ Absatz oder ganzer Brief.
 
 **BERTopic** (`ModelConfig`): Embeddings aus den unveränderten Sätzen (`paraphrase-multilingual-mpnet-base-v2`);
+die Topic-Wörter werden aus `text_noent` gebildet, damit Topics nicht aus Namen bestehen;
 Stoppwörter ([stopwords-iso](https://github.com/stopwords-iso/stopwords-de), MIT) und projektspezifische Briefformeln
 (`resources/stopwords-domain.txt`) wirken nur auf die Darstellung der Topics. UMAP mit festem Seed.
 
@@ -66,12 +80,14 @@ Themendiversität als normierte Shannon-Entropie.
 
 | v1 (2025) | v2 (2026) |
 |---|---|
-| unveröffentlichte XML (Edition v1.1), 1.393 Briefe | finaler, öffentlicher Datensatz |
+| unveröffentlichte XML (Edition v1.1), 1.393 Briefe | Schoenberg-Data v2.5, 1.794 Dokumente (1.426 mit Text) |
 | Worttrennungen als Leerzeichen („durchfüh rung") | `lb break="no"` verbindet Wörter |
 | Kleinschreibung und Stoppwortentfernung vor dem Embedding | Originalsätze ins Embedding, Stoppwörter nur für die Darstellung |
 | Fragmente („1 u.", „ii.") als eigene Dokumente | Mindestlänge 4 Wörter |
 | 231 Topics, 44 % Outlier (6.793 von 15.328 Sätzen) | siehe Notebook |
-| keine Metadaten | Absender:in, Empfänger:in, Datum, Erwähnungen |
+| keine Metadaten | Absender:in, Empfänger:in, Datum, Bezugsbriefe, Erwähnungen |
+| Gestrichenes (`del`) und bei `choice` beide Lesarten (`sic` + `corr`) im Text | an Kodierung der Edition angepasst |
+| Namen bestimmen Topics („berlin, paris …") | Topic-Wörter ohne ausgezeichnete Namen |
 | kein Seed, Modell als pickle | Seed, Embedding-Cache, safetensors |
 
 ## Tests

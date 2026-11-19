@@ -4,7 +4,7 @@
   <teiHeader>
     <fileDesc>
       <titleStmt><title>Test: Schönberg an Universal-Edition</title></titleStmt>
-      <publicationStmt><idno type="ascc">TEST 0002</idno></publicationStmt>
+      <publicationStmt><idno type="signature">TEST 0002</idno></publicationStmt>
       <sourceDesc><p>synthetisch</p></sourceDesc>
     </fileDesc>
     <profileDesc>

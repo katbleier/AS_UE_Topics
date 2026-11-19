@@ -1,20 +1,28 @@
-"""TEI-XML -> Tabellen für Topic Modeling und Netzwerkanalyse.
+"""TEI-XML (Schoenberg-UE-Edition) -> Tabellen für Topic Modeling und Netzwerkanalyse.
 
 Ergebnis:
-    letters.csv  eine Zeile pro Dokument: ID, Datum, Absender:innen, Empfänger:innen (Name + Key),
-                 im Brieftext erwähnte Personen/Organisationen/Werke, Wortzahl
-    units.csv    eine Zeile pro Textabschnitt (Satz oder Absatz) mit Brief-ID, im ORIGINALTEXT
-                 (keine Kleinschreibung, keine Stoppwortentfernung – das passiert erst im Modell)
+    letters.csv  eine Zeile pro Dokument: Signatur (ASCC), xml:id, Dokumenttyp, Datum, Absender:innen,
+                 Empfänger:innen (Name + Register-Key), Bezugsbriefe (correspContext),
+                 im Text erwähnte Personen/Organisationen/Orte/Werke, Wortzahl
+    units.csv    eine Zeile pro Textabschnitt (Satz, Absatz oder Brief) mit
+                    text         Originaltext (für die Embeddings)
+                    text_noent   derselbe Text ohne ausgezeichnete Personen-, Orts- und Organisationsnamen
+                                 (für die Topic-Darstellung, damit Topics nicht aus Namen bestehen)
 
-Editorische Entscheidungen (alle in ExtractConfig einstellbar):
-    - nur <text>/<body>, ohne <note> (Stellenkommentar), <opener>, <closer> (Briefformeln)
-    - <choice>: <expan>/<corr>/<reg> statt <abbr>/<sic>/<orig>
-    - <app>: <lem> statt <rdg>
-    - <del> wird ausgelassen, <add> aufgenommen
-    - <lb break="no"/> / <pb break="no"/> verbinden getrennte Wörter (v1-Fehler „durchfüh rung")
+Editorische Entscheidungen (in ExtractConfig einstellbar), abgestimmt auf die Kodierung der Edition
+(ediarum.asue, Datenpaket Schoenberg-Data):
+    - Text nur aus <text>/<body>
+    - ausgelassen: Briefformeln und Kopf (<opener>, <closer>, <salute>, <signed>, <dateline>, <address>, <stamp>),
+      Gestrichenes (<del>), <metamark>, <figure>, Notenbeispiele (<notatedMusic>, MEI)
+    - <note>: Editionskommentare (@resp, @sameAs, ohne @hand) immer ausgelassen; handschriftliche Vermerke
+      (@hand) nur, wenn ihre Hand in include_note_hands steht (Standard: keine)
+    - <seg type="comment"><orig>…</orig><note/></seg>: <orig> ist Brieftext und bleibt erhalten
+    - <choice>: <corr> statt <sic>, <reg> statt <orig>, <expan> statt <abbr>
+    - <supplied> (editorisch ergänzt) bleibt erhalten, <add> ebenso
+    - <lb break="no"/> verbindet getrennte Wörter (<g ref="#typoHyphen"/> trägt keinen Text)
 
 Aufruf:
-    python -m asue_topics.extract data/tei output
+    python -m asue_topics.extract <TEI-Ordner> <Ausgabe-Ordner> [sentence|paragraph|letter]
 """
 from __future__ import annotations
 
@@ -28,36 +36,48 @@ from pathlib import Path
 from lxml import etree
 
 TEI_NS = "http://www.tei-c.org/ns/1.0"
+TELOTA_NS = "http://www.telota.de"
 NS = {"tei": TEI_NS}
+_RECOVER = etree.XMLParser(recover=True)
 
 
 def _local(tag) -> str:
-    """Lokaler Elementname ohne Namespace ('' für Kommentare/PIs)."""
     if not isinstance(tag, str):
         return ""
     return tag.rsplit("}", 1)[-1]
 
 
+def _is_tei(tag) -> bool:
+    return isinstance(tag, str) and tag.startswith("{" + TEI_NS + "}")
+
+
+def parse_xml(path: Path):
+    """Parsen; bei Fehlern (z. B. doppelte xml:id) tolerant erneut."""
+    try:
+        return etree.parse(str(path)), None
+    except etree.XMLSyntaxError as e:
+        return etree.parse(str(path), _RECOVER), str(e)
+
+
 @dataclass
 class ExtractConfig:
-    # Elemente, deren gesamter Inhalt NICHT in den Text übernommen wird
     skip_elements: set = field(default_factory=lambda: {
-        "note",                      # Stellenkommentar der Edition
-        "opener", "closer",          # Anrede, Datumszeile, Gruß, Unterschrift
-        "del", "surplus",            # Gestrichenes, Überflüssiges
-        "abbr", "sic", "orig",       # in <choice>: es bleibt expan / corr / reg
-        "rdg",                       # in <app>: es bleibt lem
-        "fw", "figure", "metamark", "index", "gap",
+        "opener", "closer", "salute", "signed", "dateline", "address", "stamp",   # Briefformeln, Kopf
+        "del", "surplus", "metamark", "fw", "figure", "figDesc", "index", "gap", "anchor",
+        "notatedMusic", "rdg",
     })
-    # Elemente, die als eigener Block gelten (Absatzgrenze)
+    include_note_hands: set = field(default_factory=set)   # z. B. {"#author"} für Vermerke des Schreibers
+    choice_preference: tuple = ("corr", "reg", "expan")
     block_elements: set = field(default_factory=lambda: {
         "p", "ab", "div", "head", "item", "list", "postscript", "lg", "l",
-        "table", "row", "cell", "quote", "floatingText", "dateline", "salute", "signed",
+        "table", "row", "cell", "quote", "floatingText",
     })
-    # Trennzeichen, die vor <lb break="no"/> entfernt werden (Bindestrich bewusst NICHT,
-    # damit Komposita wie „Liszt-Partituren" erhalten bleiben)
+    entity_elements: set = field(default_factory=lambda: {"persName", "placeName", "orgName"})
+    entity_rs_types: set = field(default_factory=lambda: {"person", "place", "org"})
     strip_before_nobreak: str = "¬="
-    unit: str = "sentence"           # "sentence" | "paragraph" | "letter"
+    unit: str = "sentence"            # "sentence" | "paragraph" | "letter"
+    doc_types: set = field(default_factory=lambda: {"letter", "document"})
+    require_correspdesc: bool = True
     schoenberg_name_pattern: str = r"sch[öo]e?nberg,?\s*arnold|arnold\s+sch[öo]e?nberg"
 
 
@@ -65,49 +85,94 @@ class ExtractConfig:
 # Text aus dem body
 # ---------------------------------------------------------------------------
 
-PARA_BREAK = " "  # interner Absatzmarker
+PARA = " "    # Absatzmarker
+E_ON = ""    # Beginn einer Entität (Name)
+E_OFF = ""   # Ende einer Entität
+
+
+def _skip(el, cfg: ExtractConfig) -> bool:
+    if not _is_tei(el.tag):
+        return True                       # MEI (Notenbeispiele) u. ä.
+    name = _local(el.tag)
+    if name in cfg.skip_elements:
+        return True
+    if name == "note":
+        hand = el.get("hand")
+        return not (hand and hand in cfg.include_note_hands)
+    return False
 
 
 def _collect(el, cfg: ExtractConfig, out: list[str]) -> None:
+    if _skip(el, cfg):
+        return
     name = _local(el.tag)
-    if name in cfg.skip_elements:
-        return  # Inhalt überspringen, tail wird vom Elternaufruf behandelt
     if name in ("lb", "pb", "cb"):
         if el.get("break") == "no":
-            # getrennte Wörter zusammenziehen
             joined = "".join(out).rstrip(" \n\t" + cfg.strip_before_nobreak)
             out.clear()
             out.append(joined)
         else:
             out.append(" ")
         return
+    if name == "choice":
+        kids = [c for c in el if _is_tei(c.tag)]
+        for pref in cfg.choice_preference:
+            chosen = [c for c in kids if _local(c.tag) == pref]
+            if chosen:
+                _collect(chosen[0], cfg, out)
+                return
+        for c in kids:
+            _collect(c, cfg, out)
+        return
+
     is_block = name in cfg.block_elements
+    is_ent = name in cfg.entity_elements or (name == "rs" and el.get("type") in cfg.entity_rs_types)
     if is_block:
-        out.append(PARA_BREAK)
+        out.append(PARA)
+    if is_ent:
+        out.append(E_ON)
     if el.text:
         out.append(el.text)
     for child in el:
         _collect(child, cfg, out)
         if child.tail:
             tail = child.tail
-            # nach lb break="no" führenden Whitespace des Folgetexts entfernen
             if _local(child.tag) in ("lb", "pb", "cb") and child.get("break") == "no":
                 tail = tail.lstrip()
             out.append(tail)
+    if is_ent:
+        out.append(E_OFF)
     if is_block:
-        out.append(PARA_BREAK)
+        out.append(PARA)
 
 
 def body_paragraphs(body, cfg: ExtractConfig) -> list[str]:
+    """Absätze mit Entitätsmarkern (E_ON/E_OFF)."""
     parts: list[str] = []
     _collect(body, cfg, parts)
-    raw = "".join(parts)
     paras = []
-    for chunk in raw.split(PARA_BREAK):
+    for chunk in "".join(parts).split(PARA):
         txt = re.sub(r"\s+", " ", chunk).strip()
-        if txt:
+        if re.sub(f"[{E_ON}{E_OFF}\\s]", "", txt):
             paras.append(txt)
     return paras
+
+
+def clean(text: str) -> str:
+    t = text.replace(E_ON, "").replace(E_OFF, "")
+    t = re.sub(r"\s+", " ", t)
+    t = re.sub(r"\s+([,.;:!?)\]])", r"\1", t)      # „Krenek ." -> „Krenek."
+    t = re.sub(r"([(\[])\s+", r"\1", t)
+    t = re.sub(r"\(\s*\)|\[\s*\]", "", t)           # leere Klammern nach Namensentfernung
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def without_entities(text: str) -> str:
+    t = text
+    pat = re.compile(f"{E_ON}[^{E_ON}{E_OFF}]*{E_OFF}")
+    while pat.search(t):          # verschachtelte Namen von innen nach außen
+        t = pat.sub(" ", t)
+    return clean(t)
 
 
 # ---------------------------------------------------------------------------
@@ -117,33 +182,33 @@ def body_paragraphs(body, cfg: ExtractConfig) -> list[str]:
 ABBREV = {
     "z", "b", "u", "a", "d", "h", "s", "v", "vgl", "bzw", "usw", "etc", "ca", "nr", "no", "op",
     "dr", "prof", "hr", "hrn", "fr", "frl", "st", "str", "bd", "bde", "jan", "feb", "febr", "jän",
-    "aug", "sept", "sep", "okt", "oct", "nov", "dez", "dec", "mk", "kr", "fl", "m", "s", "ff",
-    "evtl", "eventl", "resp", "ev", "inkl", "excl", "exkl", "ue", "u.e", "k", "hrsg", "tel",
-    "sr", "ihr", "exz", "wohlgeb", "hochwohlgeb", "dir", "kapellm", "o", "w", "abs", "geb",
+    "aug", "sept", "sep", "okt", "oct", "nov", "dez", "dec", "mk", "kr", "fl", "m", "ff",
+    "evtl", "eventl", "resp", "ev", "inkl", "excl", "exkl", "ue", "k", "hrsg", "tel",
+    "sr", "exz", "wohlgeb", "hochwohlgeb", "dir", "kapellm", "o", "w", "abs", "geb", "ds", "mts",
+    "lfd", "j", "pp", "ggf", "sog", "allg", "gen", "mr", "mrs", "pt", "ord", "kgl", "kk",
 }
-_SENT_END = re.compile(r"([.!?…]+[\"“”»«')\]]*)(\s+)")
+_SENT_END = re.compile(r"([.!?…]+[\"“”»«')\]" + E_OFF + r"]*)(\s+)")
 
 
 def split_sentences(text: str) -> list[str]:
     sents, start = [], 0
     for m in _SENT_END.finditer(text):
         end = m.end(1)
-        before = text[start:end]
-        last_tok = re.findall(r"[\wÄÖÜäöüß.]+[.!?…]+$", before)
-        tok = last_tok[0].rstrip(".!?…").lower() if last_tok else ""
-        nxt = text[m.end():m.end() + 1]
-        # kein Satzende: Abkürzung, Zahl (Datum/Ordinalzahl), einzelner Buchstabe, Kleinbuchstabe danach
+        before = clean(text[start:end])
+        last_tok = re.findall(r"[\wÄÖÜäöüß.]+[.!?…]+[\"“”»«')\]]*$", before)
+        tok = last_tok[0].rstrip(".!?…\"“”»«')]").lower() if last_tok else ""
+        nxt = clean(text[m.end():m.end() + 3])[:1]
         if m.group(1).startswith(".") and (
             tok in ABBREV or tok.split(".")[-1] in ABBREV or tok.isdigit()
             or len(tok) == 1 or (nxt and nxt.islower())
         ):
             continue
         s = text[start:end].strip()
-        if s:
+        if clean(s):
             sents.append(s)
         start = m.end()
     rest = text[start:].strip()
-    if rest:
+    if clean(rest):
         sents.append(rest)
     return sents
 
@@ -157,12 +222,10 @@ def _norm(s: str | None) -> str:
 
 
 def _key(el) -> str:
-    k = el.get("key") or el.get("ref") or ""
-    return k.lstrip("#").strip()
+    return (el.get("key") or el.get("ref") or "").lstrip("#").strip()
 
 
 def _actors(action) -> list[tuple[str, str, str]]:
-    """(Typ, Name, Key) aller Akteure einer correspAction."""
     res = []
     if action is None:
         return res
@@ -188,11 +251,11 @@ def _date(action) -> str:
 def _mentions(body, cfg: ExtractConfig) -> dict[str, list[str]]:
     out = {"person": [], "org": [], "place": [], "work": []}
     for el in body.iter():
-        n = _local(el.tag)
-        # Erwähnungen in Kommentaren/Formeln nicht zählen
-        if any(_local(a.tag) in cfg.skip_elements for a in el.iterancestors()):
+        if not _is_tei(el.tag):
             continue
-        k = _key(el)
+        if any(_skip(a, cfg) for a in el.iterancestors() if _is_tei(a.tag)):
+            continue
+        n, k = _local(el.tag), _key(el)
         if not k:
             continue
         if n == "persName":
@@ -201,38 +264,44 @@ def _mentions(body, cfg: ExtractConfig) -> dict[str, list[str]]:
             out["org"].append(k)
         elif n == "placeName":
             out["place"].append(k)
-        elif n == "title" or (n == "rs" and el.get("type") in ("work", "composition", "writing", "bibl")):
-            out["work"].append(k)
         elif n == "rs" and el.get("type") in out:
             out[el.get("type")].append(k)
+        elif n == "rs" and el.get("type") in ("work", "werk", "composition", "writing"):
+            out["work"].append(k)
+    # Werke stehen in dieser Edition v. a. in Kommentaren (<bibl sameAs="werke.…">) – separat erfasst
+    for b in body.iter("{%s}bibl" % TEI_NS):
+        s = b.get("sameAs") or ""
+        if s.startswith("werke."):
+            out["work"].append(s)
     return {t: sorted(set(v)) for t, v in out.items()}
 
 
-def parse_file(path: Path, cfg: ExtractConfig):
-    tree = etree.parse(str(path))
+def parse_file(path: Path, cfg: ExtractConfig, tree=None):
+    tree = tree if tree is not None else parse_xml(path)[0]
     root = tree.getroot()
-    header = root.find("tei:teiHeader", NS)
-    body = root.find(".//tei:text/tei:body", NS)
-
-    idno = header.find(".//tei:publicationStmt/tei:idno", NS) if header is not None else None
-    if idno is None and header is not None:
-        idno = header.find(".//tei:idno", NS)
-    letter_id = _norm(idno.text) if idno is not None and idno.text else path.stem
+    sig = root.find(".//tei:idno[@type='signature']", NS)
+    xml_id = root.get("{http://www.w3.org/XML/1998/namespace}id") or ""
+    letter_id = _norm(sig.text) if sig is not None and sig.text else (xml_id or path.stem)
+    url = root.find(".//tei:publicationStmt/tei:idno[@type='URLWeb']", NS)
 
     sent = root.find(".//tei:correspDesc/tei:correspAction[@type='sent']", NS)
     recv = root.find(".//tei:correspDesc/tei:correspAction[@type='received']", NS)
     s_act, r_act = _actors(sent), _actors(recv)
     date = _date(sent)
     year = re.search(r"\d{4}", date)
+    ctx = [f"{r.get('type')}:{r.get('target')}" for r in root.findall(".//tei:correspContext/tei:ref", NS)]
 
+    body = root.find(".//tei:text/tei:body", NS)
     paras = body_paragraphs(body, cfg) if body is not None else []
-    text_words = sum(len(p.split()) for p in paras)
     ments = _mentions(body, cfg) if body is not None else {k: [] for k in ("person", "org", "place", "work")}
+    place = sent.find("tei:placeName", NS) if sent is not None else None
 
     meta = {
         "letter_id": letter_id,
-        "file": path.name,
-        "doc_type": root.get("type") or "",
+        "xml_id": xml_id,
+        "url": _norm(url.text) if url is not None else "",
+        "file": str(path.name),
+        "doc_type": root.get("{%s}doctype" % TELOTA_NS) or root.get("type") or "",
         "date": date,
         "year": int(year.group()) if year else "",
         "sender_names": " | ".join(a[1] for a in s_act),
@@ -241,9 +310,9 @@ def parse_file(path: Path, cfg: ExtractConfig):
         "receiver_names": " | ".join(a[1] for a in r_act),
         "receiver_keys": " | ".join(a[2] for a in r_act),
         "receiver_types": " | ".join(a[0] for a in r_act),
-        "place_sent": _norm("".join(sent.find("tei:placeName", NS).itertext()))
-        if sent is not None and sent.find("tei:placeName", NS) is not None else "",
-        "n_words": text_words,
+        "place_sent": _norm("".join(place.itertext())) if place is not None else "",
+        "corresp_context": " | ".join(ctx),
+        "n_words": sum(len(clean(p).split()) for p in paras),
         "mentioned_persons": " | ".join(ments["person"]),
         "mentioned_orgs": " | ".join(ments["org"]),
         "mentioned_places": " | ".join(ments["place"]),
@@ -256,19 +325,19 @@ def parse_file(path: Path, cfg: ExtractConfig):
         texts = paras
     else:
         texts = [s for p in paras for s in split_sentences(p)]
-    units = [{"letter_id": letter_id, "unit_no": i + 1, "text": t, "n_words": len(t.split())}
-             for i, t in enumerate(texts)]
+    units = []
+    for i, t in enumerate(texts):
+        c = clean(t)
+        units.append({"letter_id": letter_id, "unit_no": i + 1, "text": c,
+                      "text_noent": without_entities(t), "n_words": len(c.split())})
     return meta, units
 
 
-def element_inventory(tei_dir: Path) -> Counter:
-    """Zählt alle Elemente innerhalb von <body> – zur Prüfung der skip_elements gegen die Kodierrichtlinien."""
+def element_inventory(tei_dir: str | Path) -> Counter:
+    """Alle Elemente innerhalb von <body> zählen – zum Abgleich mit den Kodierrichtlinien."""
     c = Counter()
-    for f in sorted(tei_dir.glob("**/*.xml")):
-        try:
-            body = etree.parse(str(f)).getroot().find(".//tei:text/tei:body", NS)
-        except etree.XMLSyntaxError:
-            continue
+    for f in sorted(Path(tei_dir).glob("**/*.xml")):
+        body = parse_xml(f)[0].getroot().find(".//tei:text/tei:body", NS)
         if body is not None:
             c.update(_local(e.tag) for e in body.iter() if _local(e.tag))
     return c
@@ -278,37 +347,42 @@ def run(tei_dir: str | Path, out_dir: str | Path, cfg: ExtractConfig | None = No
     cfg = cfg or ExtractConfig()
     tei_dir, out_dir = Path(tei_dir), Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    letters, units, errors = [], [], []
+    letters, units, issues = [], [], []
+    seen = set()
     for f in sorted(tei_dir.glob("**/*.xml")):
-        try:
-            root_tag = etree.parse(str(f)).getroot().tag
-        except etree.XMLSyntaxError as e:
-            errors.append((f.name, str(e)))
+        tree, err = parse_xml(f)
+        root = tree.getroot()
+        if root is None or _local(root.tag) != "TEI":
             continue
-        if _local(root_tag) != "TEI":  # Registerdateien u. ä. überspringen
+        if err:
+            issues.append({"file": str(f.relative_to(tei_dir)), "issue": "XML-Fehler (tolerant gelesen): " + err})
+        if cfg.require_correspdesc and root.find(".//tei:correspDesc", NS) is None:
+            continue
+        dtype = root.get("{%s}doctype" % TELOTA_NS) or root.get("type") or ""
+        if cfg.doc_types and dtype and dtype not in cfg.doc_types:
             continue
         try:
-            if etree.parse(str(f)).getroot().find(".//tei:correspDesc", NS) is None:
-                continue  # keine Korrespondenz (z. B. Register, Bibliographie)
-            m, u = parse_file(f, cfg)
+            m, u = parse_file(f, cfg, tree)
         except Exception as e:  # noqa: BLE001
-            errors.append((f.name, repr(e)))
+            issues.append({"file": str(f.relative_to(tei_dir)), "issue": repr(e)})
             continue
+        if m["letter_id"] in seen:
+            issues.append({"file": str(f.relative_to(tei_dir)), "issue": f"doppelte ID {m['letter_id']}"})
+            m["letter_id"] = f"{m['letter_id']} ({f.stem})"
+            for x in u:
+                x["letter_id"] = m["letter_id"]
+        seen.add(m["letter_id"])
         letters.append(m)
         units.extend(u)
 
     _write(out_dir / "letters.csv", letters)
     _write(out_dir / "units.csv", units)
-    if errors:
-        _write(out_dir / "extract_errors.csv", [{"file": a, "error": b} for a, b in errors])
-    print(f"{len(letters)} Dokumente, {len(units)} Einheiten ({cfg.unit}), {len(errors)} Fehler -> {out_dir}")
+    _write(out_dir / "extract_issues.csv", issues or [{"file": "", "issue": ""}])
+    print(f"{len(letters)} Dokumente, {len(units)} Einheiten ({cfg.unit}), {len(issues)} Hinweise -> {out_dir}")
     return letters, units
 
 
 def _write(path: Path, rows: list[dict]):
-    if not rows:
-        path.write_text("", encoding="utf-8")
-        return
     with path.open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         w.writeheader()
