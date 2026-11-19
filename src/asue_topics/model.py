@@ -43,6 +43,7 @@ class ModelConfig:
     min_samples: int | None = None           # HDBSCAN: kleiner = weniger Outlier
     nr_topics: int | str | None = None       # z. B. 30 oder "auto"; None = keine Reduktion
     reduce_outliers: bool = False            # Outlier (-1) nachträglich nächstem Topic zuordnen
+    merge_topics: list = field(default_factory=list)   # z. B. [[4, 11]] – nach Ansicht eines Laufs gleiche Topics zusammenlegen
     # Topic-Darstellung
     ngram_range: tuple = (1, 2)
     min_df: int = 3
@@ -125,7 +126,10 @@ def fit_bertopic(units: pd.DataFrame, cfg: ModelConfig, cache_dir: str | Path):
                       random_state=cfg.seed)
     hdbscan_model = HDBSCAN(min_cluster_size=cfg.min_cluster_size, min_samples=cfg.min_samples,
                             metric="euclidean", cluster_selection_method="eom", prediction_data=True)
-    vectorizer = CountVectorizer(stop_words=load_stopwords(cfg), ngram_range=cfg.ngram_range,
+    # Bei Substantiv-Listen (POS-Filter) keine Wortpaare bilden – sie ergäben nur „vertrag vertrag"
+    pos_only = cfg.normalize is not None and cfg.normalize.lemmatize and cfg.normalize.pos_keep
+    ngram = (1, 1) if pos_only else cfg.ngram_range
+    vectorizer = CountVectorizer(stop_words=load_stopwords(cfg), ngram_range=ngram,
                                  min_df=cfg.min_df, token_pattern=TOKEN_PATTERN, lowercase=True)
 
     topic_model = BERTopic(
@@ -139,6 +143,10 @@ def fit_bertopic(units: pd.DataFrame, cfg: ModelConfig, cache_dir: str | Path):
     )
     topics, _ = topic_model.fit_transform(docs, embeddings)
 
+    if cfg.merge_topics:
+        topic_model.merge_topics(docs, cfg.merge_topics)
+        topics = topic_model.topics_
+
     if cfg.reduce_outliers:
         topics = topic_model.reduce_outliers(docs, topics, strategy="embeddings", embeddings=embeddings)
         topic_model.update_topics(docs, topics=topics, vectorizer_model=vectorizer,
@@ -147,16 +155,36 @@ def fit_bertopic(units: pd.DataFrame, cfg: ModelConfig, cache_dir: str | Path):
     result = units.copy()
     result["topic"] = topics
     info = topic_model.get_topic_info()
-    # repräsentative Einheiten im ORIGINALTEXT ausgeben (BERTopic kennt nur die Darstellungsfassung)
-    to_orig = dict(zip(units[cfg.repr_column], units["text"]))
+    rep = representative_units(units, np.asarray(topics), embeddings)
     info = pd.DataFrame({
         "topic": info["Topic"],
         "count": info["Count"],
         "top_words": info["Representation"].apply(lambda ws: ", ".join(ws[:10])),
-        "representative_units": info["Representative_Docs"].apply(
-            lambda ds: " || ".join(to_orig.get(d, d) for d in ds if d) if isinstance(ds, list) else ""),
+        "representative_units": info["Topic"].map(rep).fillna(""),
     })
     return topic_model, result, info, embeddings
+
+
+def representative_units(units: pd.DataFrame, topics: np.ndarray, embeddings: np.ndarray, n: int = 4) -> dict:
+    """Je Topic die n Sätze (Originaltext), die dem Mittelpunkt des Topics am nächsten liegen."""
+    emb = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+    texts = units["text"].to_numpy()
+    out = {}
+    for t in np.unique(topics):
+        idx = np.where(topics == t)[0]
+        if t == -1:
+            idx = idx[:2000]                       # Outlier: nur Stichprobe, Mittelpunkt wenig aussagekräftig
+        c = emb[idx].mean(axis=0)
+        sims = emb[idx] @ (c / np.linalg.norm(c))
+        chosen, seen = [], set()
+        for i in idx[np.argsort(-sims)]:
+            if texts[i] not in seen:
+                seen.add(texts[i])
+                chosen.append(texts[i])
+            if len(chosen) == n:
+                break
+        out[int(t)] = " || ".join(chosen)
+    return out
 
 
 def save_bertopic(topic_model, path: str | Path, cfg: ModelConfig):
