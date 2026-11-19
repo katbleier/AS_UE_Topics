@@ -382,3 +382,150 @@ def plot_partner_profiles(prof: pd.DataFrame, labels: dict, path: str | Path, pa
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     fig.savefig(path, dpi=200)
     plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Richtung der Kommunikation
+# ---------------------------------------------------------------------------
+
+def direction_profile(lt: pd.DataFrame, letters: pd.DataFrame) -> pd.DataFrame:
+    """Mittlerer Anteil jeder Gruppe in Briefen von bzw. an Schönberg (nur Briefe mit Text)."""
+    j = lt.join(letters.set_index("letter_id")[["direction"]], how="inner")
+    j = j[j["direction"].isin(["von Schönberg", "an Schönberg"])]
+    prof = j.groupby("direction").mean(numeric_only=True).T
+    prof.attrs["n"] = j["direction"].value_counts().to_dict()
+    return prof[["von Schönberg", "an Schönberg"]]
+
+
+def plot_direction(lt: pd.DataFrame, letters: pd.DataFrame, labels: dict, path: str | Path,
+                   order: list | None = None, separator_after=None,
+                   title: str = "Wer schreibt worüber? Briefe von und an Schönberg"):
+    """Schmetterlingsdiagramm: links Anteil in Briefen VON Schönberg, rechts in Briefen AN Schönberg."""
+    import matplotlib.pyplot as plt
+
+    prof = direction_profile(lt, letters) * 100
+    n = direction_profile(lt, letters).attrs["n"]
+    keys = [k for k in (order or prof.index) if k in prof.index]
+    keys += [k for k in prof.index if k not in keys]
+    prof = prof.loc[keys]
+    y = np.arange(len(keys))[::-1]
+    fig, ax = plt.subplots(figsize=(10, 0.42 * len(keys) + 2))
+    left, right = prof["von Schönberg"].values, prof["an Schönberg"].values
+    ax.barh(y, -left, color="#2f5d8a", height=0.7, label=f"von Schönberg ({n.get('von Schönberg', 0)} Briefe)")
+    ax.barh(y, right, color="#d1782a", height=0.7, label=f"an Schönberg ({n.get('an Schönberg', 0)} Briefe)")
+    xmax = max(left.max(), right.max()) * 1.25
+    for yi, l, r in zip(y, left, right):
+        ax.text(-l - xmax * 0.015, yi, f"{l:.0f} %", ha="right", va="center", fontsize=8.5, color="#333333")
+        ax.text(r + xmax * 0.015, yi, f"{r:.0f} %", ha="left", va="center", fontsize=8.5, color="#333333")
+    ax.set_yticks(y, [_short(labels.get(k, str(k)), 32) for k in keys], fontsize=9.5)
+    ax.set_xlim(-xmax, xmax)
+    ax.axvline(0, color="#222222", linewidth=0.8)
+    ax.set_xticks([])
+    for sp in ("top", "right", "bottom", "left"):
+        ax.spines[sp].set_visible(False)
+    ax.tick_params(length=0)
+    if separator_after is not None and separator_after in keys:
+        ys = y[keys.index(separator_after)] - 0.5
+        ax.axhline(ys, color="#888888", linewidth=0.8, linestyle="--")
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, frameon=False, fontsize=9.5)
+    ax.set_title(title, loc="left", fontsize=12, pad=30)
+    fig.tight_layout()
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Erwähnte Personen je Gruppe
+# ---------------------------------------------------------------------------
+
+def load_person_register(path: str | Path) -> pd.DataFrame:
+    """Personenregister der Edition (TEI listPerson) -> key, name, occupation."""
+    from lxml import etree
+
+    ns = "{http://www.tei-c.org/ns/1.0}"
+    rows = []
+    for p in etree.parse(str(path)).getroot().iter(ns + "person"):
+        key = p.get("{http://www.w3.org/XML/1998/namespace}id")
+        pn = p.find(ns + "persName[@type='reg']")
+        if pn is None:
+            pn = p.find(ns + "persName")
+        sur = pn.findtext(ns + "surname") if pn is not None else None
+        fore = pn.findtext(ns + "forename") if pn is not None else None
+        name = ", ".join(x.strip() for x in (sur, fore) if x and x.strip()) or \
+            (" ".join(pn.itertext()).strip() if pn is not None else key)
+        occ = p.find(ns + "occupation")
+        rows.append({"key": key, "name": " ".join(name.split()),
+                     "occupation": " ".join("".join(occ.itertext()).split()) if occ is not None else ""})
+    return pd.DataFrame(rows)
+
+
+def mentions_by_group(lt: pd.DataFrame, letters: pd.DataFrame, groups: list, register: pd.DataFrame,
+                      min_share: float = 0.3, exclude_keys: set | None = None) -> pd.DataFrame:
+    """Personen, die in Briefen erwähnt werden, in denen eine Gruppe mindestens min_share der Sätze ausmacht.
+
+    Ausgeschlossen: Absender:innen und Empfänger:innen des jeweiligen Briefs sowie exclude_keys
+    (z. B. Schönberg selbst) – es bleiben die „Dritten".
+    """
+    exclude_keys = set(exclude_keys or ())
+    L = letters.set_index("letter_id")
+    rows = []
+    for g in groups:
+        ids = lt.index[lt[g] >= min_share]
+        for lid in ids:
+            if lid not in L.index:
+                continue
+            r = L.loc[lid]
+            corr = set(_split(r.get("sender_keys"))) | set(_split(r.get("receiver_keys")))
+            for k in set(_split(r.get("mentioned_persons"))):
+                if k not in corr and k not in exclude_keys:
+                    rows.append({"gruppe": g, "key": k, "letter_id": lid})
+    df = pd.DataFrame(rows, columns=["gruppe", "key", "letter_id"])
+    out = df.groupby(["gruppe", "key"]).letter_id.nunique().rename("n_briefe").reset_index()
+    out = out.merge(register, on="key", how="left")
+    out["name"] = out["name"].fillna(out["key"])
+    return out.sort_values(["gruppe", "n_briefe"], ascending=[True, False]).reset_index(drop=True)
+
+
+def plot_mentions(df: pd.DataFrame, path: str | Path, groups: list | None = None, top_n: int = 10,
+                  title: str = "Wer wird erwähnt? Dritte in den Briefen", show_occupation: bool = True):
+    """Je Gruppe ein Balkendiagramm der am häufigsten erwähnten Personen (Zahl der Briefe)."""
+    import matplotlib.pyplot as plt
+
+    groups = groups or list(df["gruppe"].unique())
+    fig, axes = plt.subplots(1, len(groups), figsize=(5.2 * len(groups), 0.38 * top_n + 1.8), squeeze=False)
+    xmax = df[df.gruppe.isin(groups)].groupby("gruppe").n_briefe.max().max() * 1.2
+    for ax, g in zip(axes.flat, groups):
+        d = df[df.gruppe == g].head(top_n)[::-1]
+
+        def lab(r):
+            occ = str(r.get("occupation") or "")
+            occ = occ.split(",")[0].split(";")[0].strip()
+            return _short(r["name"], 26) + (f" ({_short(occ, 18)})" if show_occupation and occ else "")
+        ax.barh(range(len(d)), d["n_briefe"], color="#3b8f4f", height=0.65)
+        ax.set_yticks(range(len(d)), [lab(r) for _, r in d.iterrows()], fontsize=9)
+        for i, v in enumerate(d["n_briefe"]):
+            ax.text(v + xmax * 0.015, i, str(v), va="center", fontsize=8.5, color="#333333")
+        ax.set_title(g, loc="left", fontsize=10.5)
+        ax.set_xlim(0, xmax)
+        ax.set_xticks([])
+        for sp in ("top", "right", "bottom"):
+            ax.spines[sp].set_visible(False)
+        ax.tick_params(length=0)
+    fig.suptitle(title, x=0.01, ha="left", fontsize=13)
+    fig.text(0.01, 0.005, "Zahl der Briefe, in denen die Person erwähnt wird (ohne Absender:in/Empfänger:in)",
+             fontsize=8, color="#666666")
+    fig.tight_layout(rect=(0, 0.03, 1, 0.94))
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+
+
+def mentions_graph(df: pd.DataFrame, min_letters: int = 2):
+    """Bipartites Netz Gruppe – erwähnte Person (Kantengewicht = Zahl der Briefe), für Gephi."""
+    import networkx as nx
+
+    G = nx.Graph()
+    for _, r in df[df.n_briefe >= min_letters].iterrows():
+        G.add_node(f"G:{r.gruppe}", label=r.gruppe, kind="gruppe")
+        G.add_node(r.key, label=r["name"], kind="person", occupation=str(r.get("occupation") or ""))
+        G.add_edge(f"G:{r.gruppe}", r.key, weight=int(r.n_briefe))
+    return G
