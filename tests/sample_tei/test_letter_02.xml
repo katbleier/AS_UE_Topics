@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetisches Testdokument (kein Editionstext) -->
+<TEI xmlns="http://www.tei-c.org/ns/1.0" type="letter">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>Test: Schönberg an Universal-Edition</title></titleStmt>
+      <publicationStmt><idno type="ascc">TEST 0002</idno></publicationStmt>
+      <sourceDesc><p>synthetisch</p></sourceDesc>
+    </fileDesc>
+    <profileDesc>
+      <correspDesc>
+        <correspAction type="sent">
+          <persName key="pers_schoenberg">Schönberg, Arnold</persName>
+          <placeName key="pl_berlin">Berlin</placeName>
+          <date notBefore="1925-01-01" notAfter="1925-02-28">Anfang 1925</date>
+        </correspAction>
+        <correspAction type="received">
+          <orgName key="org_ue">Universal-Edition</orgName>
+          <persName key="pers_heinsheimer">Heinsheimer, Hans</persName>
+        </correspAction>
+      </correspDesc>
+    </profileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div type="writingSession">
+        <opener><dateline>Berlin, im Jänner 1925</dateline><salute>Lieber Herr Heinsheimer,</salute></opener>
+        <p>die Aufführung in <placeName key="pl_paris">Paris</placeName> ist verschoben worden. Bitte schicken Sie das
+          Orchestermaterial der <rs type="work" key="w_serenade">Serenade</rs> erst Ende Februar.</p>
+        <p>Was die Abrechnung betrifft: ich habe die Tantiemen für Amerika noch nicht erhalten! Können Sie das bei
+          der <orgName key="org_akm">AKM</orgName> reklamieren?</p>
+        <postscript><p>P.S. Grüßen Sie Dr. <persName key="pers_hertzka">Hertzka</persName>.</p></postscript>
+        <closer><salute>Herzlichst</salute><signed>Arnold Schönberg</signed></closer>
+      </div>
+    </body>
+  </text>
+</TEI>

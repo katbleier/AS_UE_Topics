@@ -1,0 +1,9 @@
+# Editionsdaten nicht doppelt veröffentlichen – sie liegen im mdwRepository
+data/tei/*
+!data/tei/.gitkeep
+# Zwischenergebnisse, Embedding-Cache und Modelle
+output/cache/
+output/*_model/
+.ipynb_checkpoints/
+__pycache__/
+*.pyc

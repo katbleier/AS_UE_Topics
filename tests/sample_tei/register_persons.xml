@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetische Registerdatei: muss von der Extraktion übersprungen werden -->
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader><fileDesc><titleStmt><title>Personenregister</title></titleStmt>
+    <publicationStmt><p>test</p></publicationStmt><sourceDesc><p>test</p></sourceDesc></fileDesc></teiHeader>
+  <text><body><listPerson><person xml:id="pers_stein"><persName>Stein, Erwin</persName></person></listPerson></body></text>
+</TEI>
