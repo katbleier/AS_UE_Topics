@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetisches Testdokument (kein Editionstext), Struktur angelehnt an ediarum -->
+<TEI xmlns="http://www.tei-c.org/ns/1.0" type="letter">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>Test: Universal-Edition an Schönberg</title></titleStmt>
+      <publicationStmt><idno type="signature">TEST 0001</idno></publicationStmt>
+      <sourceDesc><p>synthetisch</p></sourceDesc>
+    </fileDesc>
+    <profileDesc>
+      <correspDesc>
+        <correspAction type="sent">
+          <orgName key="org_ue">Universal-Edition</orgName>
+          <persName key="pers_hertzka">Hertzka, Emil</persName>
+          <placeName key="pl_wien">Wien</placeName>
+          <date when="1912-03-05">5. März 1912</date>
+        </correspAction>
+        <correspAction type="received">
+          <persName key="pers_schoenberg">Schönberg, Arnold</persName>
+          <placeName key="pl_berlin">Berlin</placeName>
+        </correspAction>
+      </correspDesc>
+    </profileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div type="writingSession">
+        <opener><salute>Sehr geehrter Herr Schönberg!</salute></opener>
+        <p>Wir bestätigen den Eingang des Vertrages für die <rs type="work" key="w_op9">Kammersymphonie</rs> und
+          bitten um Rücksendung der Durchfüh<lb break="no"/>
+          rung der Korrekturen bis zum 10. April.<note type="commentary">Gemeint ist die Partitur der op. 9.</note>
+          Herr <persName key="pers_stein">Stein</persName> wird das Material <del>morgen</del> <add>übermorgen</add> abholen.</p>
+        <p>Das Honorar von 300 <choice><abbr>Kr.</abbr><expan>Kronen</expan></choice> wird
+          überwiesen. Die <choice><sic>Druckrei</sic><corr>Druckerei</corr></choice> hat
+          bereits mit dem Stich begonnen, vgl. Nr. 3 unseres Verzeichnisses.</p>
+        <closer><salute>Mit vorzüglicher Hochachtung</salute><signed>Universal-Edition</signed></closer>
+      </div>
+    </body>
+  </text>
+</TEI>
